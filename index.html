@@ -145,30 +145,35 @@
       }
 
       async function sendToN8N(blob, email) {
-        const status = document.getElementById('status');
-        const formData = new FormData();
-        formData.append('audio', blob, 'grabacion.webm');
-        formData.append('tipo', currentType);
-        formData.append('email', email); // Enviamos el correo a n8n
+  const status = document.getElementById('status');
+  const formData = new FormData();
+  
+  // Agregamos ambos datos al "paquete"
+  formData.append('audio', blob, 'grabacion.webm');
+  formData.append('email', email); 
+  formData.append('tipo', currentType);
 
-        try {
-          const N8N_WEBHOOK_URL = 'https://n8n-n8n.nl4pe6.easypanel.host/webhook/1d76155c-ce60-4c39-bb57-e551f5ba48f6';
-          
-          const response = await fetch(N8N_WEBHOOK_URL, {
-            method: 'POST',
-            body: formData
-          });
+  try {
+    // IMPORTANTE: Asegúrate de usar la URL de PRODUCCIÓN de tu n8n (sin el "-test")
+    const N8N_WEBHOOK_URL = 'https://n8n-n8n.nl4pe6.easypanel.host/webhook/1d76155c-ce60-4c39-bb57-e551f5ba48f6';
+    
+    const response = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      body: formData,
+      mode: 'cors' // Cambiamos a cors para asegurar que n8n reciba todo bien
+    });
 
-          if (response.ok) {
-            status.innerHTML = `<span style="color:#34C759">¡Enviado! Revisa tu correo.</span>`;
-            document.getElementById('timer').innerText = "00:00";
-          } else {
-            status.innerText = "Error en el servidor n8n";
-          }
-        } catch (err) {
-          status.innerText = "Error de conexión";
-        }
-      }
+    if (response.ok) {
+      status.innerHTML = `<span style="color:#34C759">¡Enviado! Revisa tu correo: ${email}</span>`;
+      document.getElementById('timer').innerText = "00:00";
+    } else {
+      status.innerText = "Error en el servidor n8n";
+    }
+  } catch (err) {
+    status.innerText = "Error de conexión";
+    console.error(err);
+  }
+}
     </script>
   </body>
 </html>
