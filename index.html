@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+      :root { --apple-blue: #007AFF; --apple-gray: #8E8E93; --apple-bg: #F5F5F7; }
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; 
+        background-color: var(--apple-bg); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; 
+      }
+      .container { 
+        background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        padding: 40px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; width: 340px; border: 1px solid rgba(255,255,255,0.3);
+      }
+      h2 { font-weight: 600; font-size: 24px; letter-spacing: -0.5px; margin-bottom: 5px; }
+      p { color: var(--apple-gray); font-size: 14px; margin-bottom: 30px; }
+      
+      .type-selector { display: flex; gap: 10px; margin-bottom: 25px; justify-content: center; }
+      .type-btn { 
+        padding: 8px 12px; border-radius: 10px; border: 1px solid #ddd; background: white; cursor: pointer; font-size: 12px; transition: 0.2s;
+      }
+      .type-btn.active { background: var(--apple-blue); color: white; border-color: var(--apple-blue); }
+
+      .record-btn {
+        width: 80px; height: 80px; border-radius: 50%; border: none; background: white;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center;
+        margin: 0 auto; transition: transform 0.2s, background 0.2s;
+      }
+      .record-btn:active { transform: scale(0.92); }
+      .record-btn i { font-size: 30px; color: #FF3B30; }
+      
+      .recording { animation: pulse 1.5s infinite; background: #FF3B30 !important; }
+      .recording i { color: white !important; }
+      
+      @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
+      
+      #timer { font-size: 32px; font-weight: 300; margin: 20px 0; color: #1d1d1f; }
+      #status { font-size: 13px; color: var(--apple-gray); margin-top: 20px; min-height: 18px; }
+    </style>
+  </head>
+  <body>
+
+    <div class="container">
+      <h2>Mora AI Analytics</h2>
+      <p>Selecciona el tipo de audio</p>
+      
+      <div class="type-selector">
+        <button class="type-btn active" onclick="setType('llamada', this)">Llamada (5m)</button>
+        <button class="type-btn" onclick="setType('evaluacion', this)">Evaluación (45m)</button>
+      </div>
+
+      <div id="timer">00:00</div>
+
+      <button id="mainBtn" class="record-btn" onclick="toggleRecording()">
+        <i id="icon" class="fa-solid fa-microphone"></i>
+      </button>
+
+      <div id="status">Presiona para grabar</div>
+    </div>
+
+    <script>
+      let mediaRecorder;
+      let audioChunks = [];
+      let startTime;
+      let timerInterval;
+      let currentType = 'llamada';
+
+      function setType(type, btn) {
+        currentType = type;
+        document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+
+      async function toggleRecording() {
+  const btn = document.getElementById('mainBtn');
+  const icon = document.getElementById('icon');
+  const status = document.getElementById('status');
+
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    try {
+      // Forzamos la configuración de audio
+      const constraints = { audio: { 
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true 
+      } };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Si llegamos aquí, el permiso fue concedido
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      // ... resto del código igual ...
+      
+      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        sendToN8N(audioBlob);
+        audioChunks = [];
+      };
+
+      mediaRecorder.start();
+      startTime = Date.now();
+      timerInterval = setInterval(updateTimer, 1000);
+      btn.classList.add('recording');
+      icon.className = 'fa-solid fa-stop';
+      status.innerText = "Grabando...";
+
+    } catch (err) {
+      console.error("Error detallado:", err);
+      // Esto nos dirá si es "NotAllowedError" (bloqueado) o "NotFoundError" (no hay micro)
+      status.innerHTML = `<span style="color:red">Error: ${err.name}. Revisa el candado en la barra de URL.</span>`;
+    }
+  } else {
+    // Detener...
+    mediaRecorder.stop();
+    clearInterval(timerInterval);
+    btn.classList.remove('recording');
+    icon.className = 'fa-solid fa-microphone';
+    status.innerText = "Enviando audio...";
+  }
+}
+
+      function updateTimer() {
+        const diff = Date.now() - startTime;
+        const seconds = Math.floor((diff / 1000) % 60);
+        const minutes = Math.floor((diff / (1000 * 60)) % 60);
+        document.getElementById('timer').innerText = 
+          (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds);
+      }
+
+      async function sendToN8N(blob) {
+        const status = document.getElementById('status');
+        const formData = new FormData();
+        formData.append('audio', blob, 'grabacion.webm');
+        formData.append('tipo', currentType);
+
+        try {
+          // REEMPLAZA ESTA URL CON TU WEBHOOK DE N8N (No el de Apps Script)
+          const N8N_WEBHOOK_URL = 'https://n8n-n8n.nl4pe6.easypanel.host/webhook/fc8d844f-f1e3-4001-9ee6-c9600754e796';
+          
+          const response = await fetch(N8N_WEBHOOK_URL, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (response.ok) {
+            status.innerText = "¡Enviado con éxito!";
+            document.getElementById('timer').innerText = "00:00";
+          } else {
+            status.innerText = "Error en el servidor n8n";
+          }
+        } catch (err) {
+          status.innerText = "Error de conexión";
+        }
+      }
+    </script>
+  </body>
+</html>
