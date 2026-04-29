@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-      :root { --apple-blue: #007AFF; --apple-gray: #8E8E93; --apple-bg: #F5F5F7; }
+      :root { --apple-blue: #007AFF; --apple-gray: #8E8E93; --apple-bg: #F5F5F7; --apple-border: #d2d2d7; }
       body { 
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; 
         background-color: var(--apple-bg); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; 
@@ -15,8 +15,17 @@
         padding: 40px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; width: 340px; border: 1px solid rgba(255,255,255,0.3);
       }
       h2 { font-weight: 600; font-size: 24px; letter-spacing: -0.5px; margin-bottom: 5px; }
-      p { color: var(--apple-gray); font-size: 14px; margin-bottom: 30px; }
+      p { color: var(--apple-gray); font-size: 14px; margin-bottom: 20px; }
       
+      /* Estilo Apple para el Input */
+      .input-group { margin-bottom: 25px; text-align: left; }
+      .input-label { font-size: 12px; color: var(--apple-gray); margin-left: 12px; margin-bottom: 5px; display: block; }
+      input[type="email"] {
+        width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--apple-border);
+        background: rgba(255, 255, 255, 0.5); font-size: 16px; box-sizing: border-box; outline: none; transition: border 0.2s;
+      }
+      input[type="email"]:focus { border-color: var(--apple-blue); background: white; }
+
       .type-selector { display: flex; gap: 10px; margin-bottom: 25px; justify-content: center; }
       .type-btn { 
         padding: 8px 12px; border-radius: 10px; border: 1px solid #ddd; background: white; cursor: pointer; font-size: 12px; transition: 0.2s;
@@ -44,7 +53,12 @@
 
     <div class="container">
       <h2>Mora AI Analytics</h2>
-      <p>Selecciona el tipo de audio</p>
+      <p>Análisis de llamadas High-Ticket</p>
+
+      <div class="input-group">
+        <label class="input-label">CORREO DEL COORDINADOR</label>
+        <input type="email" id="userEmail" placeholder="correo@ejemplo.com" required>
+      </div>
       
       <div class="type-selector">
         <button class="type-btn active" onclick="setType('llamada', this)">Llamada (5m)</button>
@@ -57,7 +71,7 @@
         <i id="icon" class="fa-solid fa-microphone"></i>
       </button>
 
-      <div id="status">Presiona para grabar</div>
+      <div id="status">Ingresa tu correo para comenzar</div>
     </div>
 
     <script>
@@ -74,53 +88,53 @@
       }
 
       async function toggleRecording() {
-  const btn = document.getElementById('mainBtn');
-  const icon = document.getElementById('icon');
-  const status = document.getElementById('status');
+        const btn = document.getElementById('mainBtn');
+        const icon = document.getElementById('icon');
+        const status = document.getElementById('status');
+        const emailInput = document.getElementById('userEmail');
 
-  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-    try {
-      // Forzamos la configuración de audio
-      const constraints = { audio: { 
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true 
-      } };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      // Si llegamos aquí, el permiso fue concedido
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      // ... resto del código igual ...
-      
-      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        sendToN8N(audioBlob);
-        audioChunks = [];
-      };
+        // Validación de correo estilo Apple
+        if (!emailInput.value || !emailInput.checkValidity()) {
+          status.innerHTML = `<span style="color:#FF3B30">Ingresa un correo válido primero</span>`;
+          emailInput.focus();
+          return;
+        }
 
-      mediaRecorder.start();
-      startTime = Date.now();
-      timerInterval = setInterval(updateTimer, 1000);
-      btn.classList.add('recording');
-      icon.className = 'fa-solid fa-stop';
-      status.innerText = "Grabando...";
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+          try {
+            const constraints = { audio: { echoCancellation: true, noiseSuppression: true } };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            
+            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+              const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+              sendToN8N(audioBlob, emailInput.value);
+              audioChunks = [];
+            };
 
-    } catch (err) {
-      console.error("Error detallado:", err);
-      // Esto nos dirá si es "NotAllowedError" (bloqueado) o "NotFoundError" (no hay micro)
-      status.innerHTML = `<span style="color:red">Error: ${err.name}. Revisa el candado en la barra de URL.</span>`;
-    }
-  } else {
-    // Detener...
-    mediaRecorder.stop();
-    clearInterval(timerInterval);
-    btn.classList.remove('recording');
-    icon.className = 'fa-solid fa-microphone';
-    status.innerText = "Enviando audio...";
-  }
-}
+            mediaRecorder.start();
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            emailInput.disabled = true; // Bloquear email durante grabación
+            btn.classList.add('recording');
+            icon.className = 'fa-solid fa-stop';
+            status.innerText = "Grabando análisis...";
+
+          } catch (err) {
+            status.innerHTML = `<span style="color:#FF3B30">Error: Permite el acceso al micro</span>`;
+          }
+        } else {
+          mediaRecorder.stop();
+          clearInterval(timerInterval);
+          btn.classList.remove('recording');
+          icon.className = 'fa-solid fa-microphone';
+          status.innerText = "Enviando a MMedia...";
+          emailInput.disabled = false;
+        }
+      }
 
       function updateTimer() {
         const diff = Date.now() - startTime;
@@ -130,15 +144,15 @@
           (minutes < 10 ? "0" + minutes : minutes) + ":" + (seconds < 10 ? "0" + seconds : seconds);
       }
 
-      async function sendToN8N(blob) {
+      async function sendToN8N(blob, email) {
         const status = document.getElementById('status');
         const formData = new FormData();
         formData.append('audio', blob, 'grabacion.webm');
         formData.append('tipo', currentType);
+        formData.append('email', email); // Enviamos el correo a n8n
 
         try {
-          // REEMPLAZA ESTA URL CON TU WEBHOOK DE N8N (No el de Apps Script)
-          const N8N_WEBHOOK_URL = 'https://n8n-n8n.nl4pe6.easypanel.host/webhook-test/1d76155c-ce60-4c39-bb57-e551f5ba48f6';
+          const N8N_WEBHOOK_URL = 'https://n8n-n8n.nl4pe6.easypanel.host/webhook/1d76155c-ce60-4c39-bb57-e551f5ba48f6';
           
           const response = await fetch(N8N_WEBHOOK_URL, {
             method: 'POST',
@@ -146,7 +160,7 @@
           });
 
           if (response.ok) {
-            status.innerText = "¡Enviado con éxito!";
+            status.innerHTML = `<span style="color:#34C759">¡Enviado! Revisa tu correo.</span>`;
             document.getElementById('timer').innerText = "00:00";
           } else {
             status.innerText = "Error en el servidor n8n";
