@@ -52,12 +52,12 @@
   <body>
 
     <div class="container">
-      <h2>Mora AI Analytics</h2>
-      <p>Análisis de llamadas High-Ticket</p>
+      <h2>Mora Analytics</h2>
+      <p>Análisis de llamadas</p>
 
       <div class="input-group">
-        <label class="input-label">CORREO DEL COORDINADOR</label>
-        <input type="email" id="userEmail" placeholder="correo@ejemplo.com" required>
+        <label class="input-label"></label>
+        <input type="email" id="userEmail" placeholder="Escribe tu correo..." required>
       </div>
       
       <div class="type-selector">
@@ -108,11 +108,19 @@
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             
             mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            
+            // --- CÓDIGO ACTUALIZADO AQUÍ ---
             mediaRecorder.onstop = async () => {
               const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
               sendToN8N(audioBlob, emailInput.value);
               audioChunks = [];
+              
+              // Apagar el hardware del micrófono (quita el punto naranja)
+              if (mediaRecorder && mediaRecorder.stream) {
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+              }
             };
+            // -------------------------------
 
             mediaRecorder.start();
             startTime = Date.now();
